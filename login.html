@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SCLC Login</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;max-width:420px;margin:40px auto;padding:0 16px}
+    input,button{width:100%;padding:10px 12px;margin:8px 0;font-size:16px}
+    button{cursor:pointer}
+    .err{color:#c00;min-height:20px}
+    .hint{color:#666;font-size:13px}
+    .card{border:1px solid #ddd;border-radius:10px;padding:16px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>登入</h2>
+    <div class="hint">使用 Cloudflare Worker JWT 登入</div>
+    <input id="emp" placeholder="工號 emp_no" autocomplete="username" />
+    <input id="pwd" type="password" placeholder="密碼" autocomplete="current-password" />
+    <button id="btn">登入</button>
+    <div id="msg" class="err"></div>
+  </div>
+
+  <script type="module">
+    import { apiFetch, setToken, clearToken } from "./js/api.js";
+
+    // 如果已有 token，先試著驗證，避免每次都要登入
+    (async () => {
+      try {
+        await apiFetch("/api/me");
+        location.href = "./app.html";
+      } catch {
+        clearToken();
+      }
+    })();
+
+    const $emp = document.querySelector("#emp");
+    const $pwd = document.querySelector("#pwd");
+    const $msg = document.querySelector("#msg");
+
+    async function doLogin() {
+      $msg.textContent = "";
+      try {
+        const r = await apiFetch("/api/login", {
+          method: "POST",
+          auth: false,
+          body: { emp_no: $emp.value.trim(), password: $pwd.value },
+        });
+
+        setToken(r.token);
+
+        if (String(r.user?.must_change_password || "N").toUpperCase() === "Y") {
+          location.href = "./change-password.html";
+        } else {
+          location.href = "./app.html";
+        }
+      } catch (e) {
+        $msg.textContent = e.data?.error || e.message;
+      }
+    }
+
+    document.querySelector("#btn").addEventListener("click", doLogin);
+    $pwd.addEventListener("keydown", (ev) => { if (ev.key === "Enter") doLogin(); });
+  </script>
+</body>
+</html>

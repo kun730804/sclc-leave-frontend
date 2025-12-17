@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - Users</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;max-width:980px;margin:40px auto;padding:0 16px}
+    pre{background:#0b1020;color:#d6e1ff;padding:16px;border-radius:10px;overflow:auto;max-height:70vh}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    button{padding:10px 12px;font-size:15px;cursor:pointer}
+    .card{border:1px solid #ddd;border-radius:10px;padding:16px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Admin - Users</h2>
+    <div class="row">
+      <button onclick="location.href='./app.html'">回主頁</button>
+      <button id="reload">重新載入</button>
+    </div>
+    <pre id="out">Loading...</pre>
+  </div>
+
+  <script type="module">
+    import { apiFetch, clearToken } from "./js/api.js";
+
+    async function load() {
+      const out = document.querySelector("#out");
+      out.textContent = "Loading...";
+      try {
+        const data = await apiFetch("/api/users");
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        if (e.status === 401) {
+          clearToken();
+          location.href = "./login.html";
+          return;
+        }
+        out.textContent = (e.data?.error || e.message) + (e.status ? ` (HTTP ${e.status})` : "");
+      }
+    }
+
+    document.querySelector("#reload").addEventListener("click", load);
+    load();
+  </script>
+</body>
+</html>
