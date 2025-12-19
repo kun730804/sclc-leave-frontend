@@ -1,14 +1,15 @@
-const API_BASE = "https://misty-king-45d9.kun0224.workers.dev";
+// api.js - minimal client for SCLC Cloudflare Worker
+export const BASE = "https://misty-king-45d9.kun0224.workers.dev";
 
 export function getToken() {
-  // Prefer new key, keep backward compatibility
   return localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
 }
 
-export function setToken(t) {
-  // Write both keys so old/new code can read it
-  localStorage.setItem("auth_token", t);
-  localStorage.setItem("token", t);
+export function setToken(token) {
+  if (token) {
+    localStorage.setItem("auth_token", token);
+    localStorage.setItem("token", token); // backward compat
+  }
 }
 
 export function clearToken() {
@@ -16,30 +17,26 @@ export function clearToken() {
   localStorage.removeItem("token");
 }
 
-export async function apiFetch(path, { method = "GET", body, auth = true } = {}) {
-  const headers = { "Content-Type": "application/json" };
-
-  if (auth) {
-    const token = getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+export async function fetchJSON(path, opts={}) {
+  const url = path.startsWith("http") ? path : `${BASE}${path}`;
+  const headers = new Headers(opts.headers || {});
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (opts.json !== undefined) {
+    headers.set("Content-Type", "application/json");
+    opts.body = JSON.stringify(opts.json);
   }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const text = await res.text();
+  const res = await fetch(url, {...opts, headers});
+  const ct = res.headers.get("content-type") || "";
   let data = null;
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
+    data = ct.includes("application/json") ? await res.json() : await res.text();
+  } catch (e) {
+    data = null;
   }
-
   if (!res.ok) {
-    const err = new Error(data?.error || data?.message || `HTTP ${res.status}`);
+    const msg = (data && data.error) ? data.error : (typeof data === "string" ? data : `HTTP ${res.status}`);
+    const err = new Error(msg);
     err.status = res.status;
     err.data = data;
     throw err;
