@@ -1,12 +1,13 @@
 const API_BASE = "https://misty-king-45d9.kun0224.workers.dev";
 
 export function getToken() {
+  // Prefer new key, keep backward compatibility
   return localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
 }
 
 export function setToken(t) {
+  // Write both keys so old/new code can read it
   localStorage.setItem("auth_token", t);
-  // backward compat
   localStorage.setItem("token", t);
 }
 
