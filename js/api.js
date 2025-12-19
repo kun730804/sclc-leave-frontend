@@ -1,14 +1,17 @@
 const API_BASE = "https://misty-king-45d9.kun0224.workers.dev";
 
 export function getToken() {
-  return localStorage.getItem("token") || "";
+  return localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
 }
 
 export function setToken(t) {
+  localStorage.setItem("auth_token", t);
+  // backward compat
   localStorage.setItem("token", t);
 }
 
 export function clearToken() {
+  localStorage.removeItem("auth_token");
   localStorage.removeItem("token");
 }
 
