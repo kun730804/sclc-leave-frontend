@@ -1,4 +1,35 @@
 <!doctype html>
-<meta charset="utf-8" />
-<meta http-equiv="refresh" content="0; url=./login.html" />
-<title>Redirecting...</title>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SCLC DB</title>
+  <style>
+    body{font-family: system-ui, -apple-system, "Microsoft JhengHei", Arial, sans-serif; padding:24px;}
+    .card{max-width:720px}
+    a{color:#0b57d0}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SCLC_DB（排假系統）</h1>
+    <p>正在導向…</p>
+    <p><a href="./login.html">前往登入</a></p>
+  </div>
+  <script type="module">
+    import { getToken, fetchJSON } from "./api.js";
+    async function go() {
+      const t = getToken();
+      if (!t) return location.replace("./login.html");
+      try {
+        await fetchJSON("/api/me");
+        location.replace("./app.html");
+      } catch(e) {
+        localStorage.removeItem("auth_token"); localStorage.removeItem("token");
+        location.replace("./login.html");
+      }
+    }
+    go();
+  </script>
+</body>
+</html>

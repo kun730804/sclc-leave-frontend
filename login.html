@@ -3,66 +3,91 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SCLC Login</title>
+  <title>登入 - SCLC DB</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;max-width:420px;margin:40px auto;padding:0 16px}
-    input,button{width:100%;padding:10px 12px;margin:8px 0;font-size:16px}
-    button{cursor:pointer}
-    .err{color:#c00;min-height:20px}
-    .hint{color:#666;font-size:13px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:16px}
+    body{font-family: system-ui, -apple-system, "Microsoft JhengHei", Arial, sans-serif; padding:24px;}
+    .wrap{max-width:520px}
+    label{display:block; margin-top:14px; font-weight:600}
+    input{width:100%; padding:10px 12px; font-size:16px; box-sizing:border-box}
+    button{margin-top:18px; padding:10px 14px; font-size:16px; width:100%}
+    .hint{margin-top:10px; color:#555; font-size:13px}
+    .err{margin-top:10px; color:#b00020; white-space:pre-wrap}
+    .ok{margin-top:10px; color:#137333}
+    .row{display:flex; gap:10px}
+    .row>div{flex:1}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>登入</h2>
-    <div class="hint">使用 Cloudflare Worker JWT 登入</div>
-    <input id="emp" placeholder="工號 emp_no" autocomplete="username" />
-    <input id="pwd" type="password" placeholder="密碼" autocomplete="current-password" />
-    <button id="btn">登入</button>
-    <div id="msg" class="err"></div>
+  <div class="wrap">
+    <h1>登入</h1>
+    <p class="hint">使用 Cloudflare Worker JWT 登入</p>
+
+    <form id="f">
+      <div class="row">
+        <div>
+          <label for="emp">工號 / 帳號</label>
+          <input id="emp" autocomplete="username" placeholder="例如：123456" />
+        </div>
+      </div>
+
+      <label for="pw">密碼</label>
+      <input id="pw" type="password" autocomplete="current-password" placeholder="••••••" />
+
+      <button id="btn" type="submit">登入</button>
+      <div id="msg" class="err" hidden></div>
+      <div id="ok" class="ok" hidden></div>
+    </form>
+
+    <p class="hint">若要用 Console 測試登入，下面會印出 token 前 20 碼。</p>
   </div>
 
   <script type="module">
-    import { apiFetch, setToken, clearToken } from "./js/api.js";
+    import { fetchJSON, setToken, clearToken, BASE } from "./api.js";
 
-    // 如果已有 token，先試著驗證，避免每次都要登入
-    (async () => {
-      try {
-        await apiFetch("/api/me");
-        location.href = "./app.html";
-      } catch {
-        clearToken();
-      }
-    })();
+    const f = document.getElementById("f");
+    const emp = document.getElementById("emp");
+    const pw = document.getElementById("pw");
+    const btn = document.getElementById("btn");
+    const msg = document.getElementById("msg");
+    const ok = document.getElementById("ok");
 
-    const $emp = document.querySelector("#emp");
-    const $pwd = document.querySelector("#pwd");
-    const $msg = document.querySelector("#msg");
+    clearToken(); // 進到登入頁就先清掉舊 token，避免混亂
 
-    async function doLogin() {
-      $msg.textContent = "";
-      try {
-        const r = await apiFetch("/api/login", {
-          method: "POST",
-          auth: false,
-          body: { emp_no: $emp.value.trim(), password: $pwd.value },
-        });
-
-        setToken(r.token);
-
-        if (String(r.user?.must_change_password || "N").toUpperCase() === "Y") {
-          location.href = "./change-password.html";
-        } else {
-          location.href = "./app.html";
-        }
-      } catch (e) {
-        $msg.textContent = e.data?.error || e.message;
-      }
+    function showErr(text) {
+      msg.hidden = !text;
+      msg.textContent = text || "";
+      ok.hidden = true;
+    }
+    function showOk(text) {
+      ok.hidden = !text;
+      ok.textContent = text || "";
+      msg.hidden = true;
     }
 
-    document.querySelector("#btn").addEventListener("click", doLogin);
-    $pwd.addEventListener("keydown", (ev) => { if (ev.key === "Enter") doLogin(); });
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showErr("");
+      btn.disabled = true;
+      btn.textContent = "登入中…";
+      try {
+        const data = await fetchJSON("/api/login", {
+          method: "POST",
+          json: { emp_no: emp.value.trim(), password: pw.value }
+        });
+        if (!data?.token) throw new Error("login ok but missing token");
+        setToken(data.token);
+        showOk("✅ 登入成功，token 已存入 localStorage（auth_token）。");
+        console.log("login:", data);
+        console.log("token head:", String(data.token).slice(0, 20) + "...");
+        setTimeout(() => location.replace("./app.html"), 250);
+      } catch (err) {
+        console.error(err);
+        showErr("登入失敗： " + (err?.message || err));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "登入";
+      }
+    });
   </script>
 </body>
 </html>
