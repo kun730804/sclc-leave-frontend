@@ -1,83 +1,81 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin - SCLC DB</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin</title>
   <style>
-    body{font-family: system-ui, -apple-system, "Microsoft JhengHei", Arial, sans-serif; padding:24px;}
-    .wrap{max-width:900px}
-    button{padding:8px 10px; border:1px solid #ddd; background:#fff; cursor:pointer; border-radius:6px;}
-    pre{background:#f6f8fa; padding:12px; border-radius:8px; overflow:auto}
-    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-    input{padding:8px 10px;}
+    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;max-width:900px;margin:32px auto;padding:0 16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input{padding:8px 10px;border:1px solid #ccc;border-radius:8px}
+    button{padding:8px 10px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}
+    button.primary{background:#111;color:#fff;border-color:#111}
+    pre{background:#0b1020;color:#cfe6ff;padding:12px;border-radius:10px;overflow:auto}
+    .err{color:#c00;min-height:18px}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Admin</h1>
-    <div class="row">
-      <button onclick="location.href='./app.html'">回月曆</button>
-      <button id="btnPing">/api/events/ping</button>
-      <button id="btnMe">/api/me</button>
-    </div>
-
-    <h3>手動同步（管理者）</h3>
-    <div class="row">
-      <input id="start" placeholder="start YYYY-MM-DD" />
-      <input id="end" placeholder="end YYYY-MM-DD" />
-      <button id="btnSyncLeave">同步排假</button>
-      <button id="btnSyncOT">同步加班</button>
-    </div>
-
-    <pre id="out">（結果會顯示在這裡）</pre>
+  <h1>Admin</h1>
+  <div class="row">
+    <button onclick="location.href='./app.html'">← 回月曆</button>
   </div>
 
+  <h3>批次同步（建議 5 天一段）</h3>
+  <div class="row">
+    <input id="start" type="date"/>
+    <input id="end" type="date"/>
+    <button class="primary" id="btnLeave">同步排假</button>
+    <button class="primary" id="btnOT">同步加班</button>
+  </div>
+  <div class="err" id="err"></div>
+  <pre id="log"></pre>
+
   <script type="module">
-    import { fetchJSON, getToken, clearToken } from "./api.js";
-    const out = document.getElementById("out");
-    const start = document.getElementById("start");
-    const end = document.getElementById("end");
+    import { me, syncLeaveEvents, syncOvertimeEvents, clearToken } from "./api.js";
+    const $start = document.querySelector("#start");
+    const $end = document.querySelector("#end");
+    const $log = document.querySelector("#log");
+    const $err = document.querySelector("#err");
+    const $btnLeave = document.querySelector("#btnLeave");
+    const $btnOT = document.querySelector("#btnOT");
 
-    function setOut(x) {
-      out.textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2);
-    }
+    function iso(d){ return d.toISOString().slice(0,10); }
+    function log(line){ $log.textContent += line + "\n"; }
+    function setErr(t){ $err.textContent = t || ""; }
 
-    async function guardAdmin() {
-      try {
-        const me = await fetchJSON("/api/me");
-        if (String(me?.role || "").toLowerCase() !== "admin") {
-          setOut("你不是 admin，無法使用此頁。");
-          throw new Error("not admin");
+    (async () => {
+      try{
+        const m = await me();
+        if (String(m.user?.role).toLowerCase() !== "admin") {
+          location.href="./app.html";
+          return;
         }
-        return me;
-      } catch (e) {
-        clearToken();
-        location.replace("./login.html");
+      }catch(e){
+        clearToken(); location.href="./login.html";
+        return;
+      }
+      const now = new Date();
+      $start.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+      $end.value = iso(new Date(now.getFullYear(), now.getMonth()+1, 1));
+      log("Ready.");
+    })();
+
+    async function run(kind){
+      setErr("");
+      $btnLeave.disabled = $btnOT.disabled = true;
+      try{
+        const start = $start.value, end = $end.value;
+        if (!start || !end) { setErr("請先選日期"); return; }
+        const r = kind==="leave" ? await syncLeaveEvents(start,end) : await syncOvertimeEvents(start,end);
+        log(`[${kind}] ${start}~${end} => created ${r.created}, updated ${r.updated}, deleted ${r.deleted}, skipped ${r.skipped}`);
+      }catch(e){
+        setErr(e?.data?.error || e.message || "同步失敗");
+      }finally{
+        $btnLeave.disabled = $btnOT.disabled = false;
       }
     }
-
-    await guardAdmin();
-
-    document.getElementById("btnPing").onclick = async () => {
-      try { setOut(await fetchJSON("/api/events/ping")); } catch(e) { setOut("ERR: " + (e?.message||e)); }
-    };
-    document.getElementById("btnMe").onclick = async () => {
-      try { setOut(await fetchJSON("/api/me")); } catch(e) { setOut("ERR: " + (e?.message||e)); }
-    };
-
-    document.getElementById("btnSyncLeave").onclick = async () => {
-      try {
-        const s = start.value.trim(), e = end.value.trim();
-        setOut(await fetchJSON(`/api/sync/leave-events?start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`, { method:"POST" }));
-      } catch(err) { setOut("ERR: " + (err?.message||err)); }
-    };
-    document.getElementById("btnSyncOT").onclick = async () => {
-      try {
-        const s = start.value.trim(), e = end.value.trim();
-        setOut(await fetchJSON(`/api/sync/overtime-events?start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`, { method:"POST" }));
-      } catch(err) { setOut("ERR: " + (err?.message||err)); }
-    };
+    $btnLeave.addEventListener("click", () => run("leave"));
+    $btnOT.addEventListener("click", () => run("ot"));
   </script>
 </body>
 </html>

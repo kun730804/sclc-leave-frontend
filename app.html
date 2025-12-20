@@ -1,189 +1,181 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>月曆 - SCLC DB</title>
-
-  <!-- FullCalendar (CDN) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SCLC 月曆</title>
   <style>
-    body{font-family: system-ui, -apple-system, "Microsoft JhengHei", Arial, sans-serif; margin:0; padding:0;}
-    header{display:flex; gap:10px; align-items:center; padding:16px 18px; border-bottom:1px solid #eee;}
-    header h1{font-size:18px; margin:0; flex:1}
-    .btn{padding:8px 10px; border:1px solid #ddd; background:#fff; cursor:pointer; border-radius:6px;}
-    .btn:hover{background:#fafafa}
-    .pill{font-size:12px; padding:4px 8px; background:#f1f3f4; border-radius:999px}
-    #wrap{padding:18px;}
-    #calendar{max-width:1100px; margin:0 auto;}
-    #status{max-width:1100px; margin:10px auto 0; color:#555; font-size:13px; white-space:pre-wrap}
-    .bar{max-width:1100px; margin:0 auto 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-    .bar .spacer{flex:1}
-    .hint{color:#666; font-size:12px}
+    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;margin:0}
+    header{padding:14px 18px;border-bottom:1px solid #eee;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    header h1{font-size:18px;margin:0;margin-right:10px}
+    .muted{color:#666}
+    button{cursor:pointer}
+    .btn{padding:8px 10px;border:1px solid #ccc;border-radius:8px;background:#fff}
+    .btn.primary{background:#111;color:#fff;border-color:#111}
+    main{padding:18px}
+    .card{border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input{padding:8px 10px;border:1px solid #ccc;border-radius:8px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:14px}
+    th{font-weight:600;background:#fafafa}
+    .tag{display:inline-block;padding:2px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px}
+    .err{color:#c00;min-height:18px}
+    .ok{color:#080;min-height:18px}
+    .right{margin-left:auto}
   </style>
 </head>
 <body>
   <header>
     <h1>月曆</h1>
-    <span id="me" class="pill">讀取中…</span>
-    <button class="btn" id="btnChangePw">改密碼</button>
-    <button class="btn" id="btnAdmin" hidden>Admin</button>
+    <span class="muted" id="who">未登入</span>
+    <span class="right"></span>
+    <button class="btn" id="btnAdmin" style="display:none">Admin</button>
+    <button class="btn" id="btnPwd">改密碼</button>
     <button class="btn" id="btnLogout">登出</button>
   </header>
 
-  <div id="wrap">
-    <div class="bar">
-      <button class="btn" id="btnRefresh">重新載入</button>
-      <button class="btn" id="btnSyncLeave" hidden>同步排假（管理者）</button>
-      <button class="btn" id="btnSyncOT" hidden>同步加班（管理者）</button>
-      <span class="spacer"></span>
-      <span class="hint">目前：用 /api/events 顯示 CalendarEvents（公司月曆）</span>
+  <main>
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="muted">查詢區間</div>
+          <div class="row" style="margin-top:6px">
+            <input id="start" type="date"/>
+            <input id="end" type="date"/>
+            <button class="btn primary" id="btnLoad">載入</button>
+          </div>
+        </div>
+        <div style="flex:1"></div>
+        <div>
+          <div class="muted">快速同步（admin）</div>
+          <div class="row" style="margin-top:6px">
+            <button class="btn" id="btnSyncLeave">同步排假</button>
+            <button class="btn" id="btnSyncOT">同步加班</button>
+          </div>
+        </div>
+      </div>
+      <div class="err" id="err"></div>
+      <div class="ok" id="ok"></div>
     </div>
 
-    <div id="calendar"></div>
-    <div id="status"></div>
-  </div>
+    <div class="card">
+      <div class="muted">事件列表</div>
+      <div style="margin-top:10px;overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>標題</th>
+              <th>類型</th>
+              <th>人員</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
 
   <script type="module">
-    import { fetchJSON, getToken, clearToken } from "./api.js";
+    import { me, clearToken, fetchEvents, syncLeaveEvents, syncOvertimeEvents } from "./api.js";
 
-    const $ = (id) => document.getElementById(id);
-    const meEl = $("me");
-    const statusEl = $("status");
+    const $who = document.querySelector("#who");
+    const $btnLogout = document.querySelector("#btnLogout");
+    const $btnPwd = document.querySelector("#btnPwd");
+    const $btnAdmin = document.querySelector("#btnAdmin");
+    const $start = document.querySelector("#start");
+    const $end = document.querySelector("#end");
+    const $btnLoad = document.querySelector("#btnLoad");
+    const $btnSyncLeave = document.querySelector("#btnSyncLeave");
+    const $btnSyncOT = document.querySelector("#btnSyncOT");
+    const $tbody = document.querySelector("#tbody");
+    const $err = document.querySelector("#err");
+    const $ok = document.querySelector("#ok");
 
-    function setStatus(text) {
-      statusEl.textContent = text || "";
+    let meData = null;
+
+    function isoDate(d){ return d.toISOString().slice(0,10); }
+    function setMsg(ok, err){ $ok.textContent = ok||""; $err.textContent = err||""; }
+
+    function render(items){
+      $tbody.innerHTML = "";
+      for (const ev of items) {
+        const tr = document.createElement("tr");
+        const d = (ev.start || ev.start_at || "").slice(0,10);
+        const title = ev.title || "";
+        const type = ev.event_type || ev.type || "";
+        const owner = ev.owner_emp_no || ev.emp_no || "";
+        const status = ev.status || "";
+        tr.innerHTML = `
+          <td>${d}</td>
+          <td>${title}</td>
+          <td><span class="tag">${type}</span></td>
+          <td>${owner}</td>
+          <td>${status}</td>
+        `;
+        $tbody.appendChild(tr);
+      }
     }
 
-    async function requireAuth() {
-      const t = getToken();
-      if (!t) throw new Error("missing token");
-      return await fetchJSON("/api/me");
+    async function load(){
+      setMsg("", "");
+      $btnLoad.disabled = true;
+      try{
+        const data = await fetchEvents($start.value, $end.value);
+        const items = (data.items || []).filter(x => x.status !== "deleted");
+        render(items);
+        setMsg(`已載入 ${items.length} 筆`, "");
+      }catch(e){
+        setMsg("", e?.data?.error || e.message || "載入失敗");
+      }finally{
+        $btnLoad.disabled = false;
+      }
     }
 
-    function toYMD(d) {
-      const z = (n) => String(n).padStart(2,"0");
-      return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+    async function doSync(kind){
+      setMsg("", "");
+      const start = $start.value, end = $end.value;
+      if (!start || !end){ setMsg("", "請先選日期"); return; }
+      try{
+        const r = kind === "leave" ? await syncLeaveEvents(start, end) : await syncOvertimeEvents(start, end);
+        setMsg(`同步完成：created ${r.created}, updated ${r.updated}, deleted ${r.deleted}, skipped ${r.skipped}`, "");
+        await load();
+      }catch(e){
+        setMsg("", e?.data?.error || e.message || "同步失敗");
+      }
     }
 
-    // FullCalendar init
-    let calendar;
-    function initCalendar() {
-      const el = document.getElementById("calendar");
-      calendar = new FullCalendar.Calendar(el, {
-        initialView: "dayGridMonth",
-        height: "auto",
-        locale: "zh-tw",
-        headerToolbar: {
-          left: "prev,next today",
-          center: "title",
-          right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek"
-        },
-        events: async (info, success, failure) => {
-          try {
-            const start = toYMD(info.start);
-            const end = toYMD(info.end);
-            const data = await fetchJSON(`/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-            const items = data?.items || [];
-            const evs = items
-              .filter(x => x && x.status !== "deleted")
-              .map(x => ({
-                id: x.id,
-                title: x.title || "",
-                start: x.start,
-                end: x.end,
-                allDay: String(x.all_day).toLowerCase() === "true" || x.all_day === true,
-                extendedProps: x
-              }));
-            setStatus(`載入事件：${evs.length} 筆\n視窗：${start} ~ ${end}`);
-            success(evs);
-          } catch (e) {
-            console.error(e);
-            setStatus("載入失敗：" + (e?.message || e));
-            failure(e);
-          }
-        },
-        eventClick: (arg) => {
-          const x = arg.event.extendedProps || {};
-          const lines = [
-            `標題：${arg.event.title}`,
-            `開始：${arg.event.startStr}`,
-            `結束：${arg.event.endStr || ""}`,
-            `類型：${x.event_type || ""}`,
-            `狀態：${x.status || ""}`,
-            `參考：${x.ref_id || ""}`,
-            `說明：${x.description || ""}`,
-          ];
-          alert(lines.join("\n"));
+    (async () => {
+      try{
+        meData = await me();
+        const u = meData.user || {};
+        $who.textContent = `你好：${u.name_zh || u.login_name || "user"} (${u.emp_no}) role=${u.role}`;
+        if (String(u.role).toLowerCase() === "admin") {
+          $btnAdmin.style.display = "";
         }
-      });
-      calendar.render();
-    }
-
-    async function boot() {
-      try {
-        const me = await requireAuth();
-        meEl.textContent = `你好：${me?.name_zh || me?.login_name || "user"} (${me?.emp_no || ""}) role=${me?.role || ""}`;
-        const isAdmin = String(me?.role || "").toLowerCase() === "admin";
-        $("btnAdmin").hidden = !isAdmin;
-        $("btnSyncLeave").hidden = !isAdmin;
-        $("btnSyncOT").hidden = !isAdmin;
-        initCalendar();
-      } catch (e) {
-        console.error(e);
+      }catch(e){
         clearToken();
-        location.replace("./login.html");
+        location.href = "./login.html";
+        return;
       }
-    }
 
-    $("btnLogout").onclick = () => {
-      clearToken();
-      location.replace("./login.html");
-    };
-    $("btnChangePw").onclick = () => location.href = "./change-password.html";
-    $("btnAdmin").onclick = () => location.href = "./admin.html";
-    $("btnRefresh").onclick = () => calendar?.refetchEvents();
+      // default range: this month
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth()+1, 1);
+      $start.value = isoDate(start);
+      $end.value = isoDate(end);
+      await load();
+    })();
 
-    // Admin sync buttons (manual)
-    async function promptWindow(defaultDays) {
-      const start = prompt("start (YYYY-MM-DD)", toYMD(new Date()));
-      if (!start) return null;
-      const d = new Date(start + "T00:00:00");
-      const endD = new Date(d.getTime() + (defaultDays*24*3600*1000));
-      const end = prompt("end (YYYY-MM-DD)", toYMD(endD));
-      if (!end) return null;
-      return {start, end};
-    }
-
-    $("btnSyncLeave").onclick = async () => {
-      try {
-        const w = await promptWindow(7);
-        if (!w) return;
-        setStatus("同步排假中…");
-        const res = await fetchJSON(`/api/sync/leave-events?start=${encodeURIComponent(w.start)}&end=${encodeURIComponent(w.end)}`, { method: "POST" });
-        setStatus("✅ 同步排假完成\n" + JSON.stringify(res, null, 2));
-        calendar?.refetchEvents();
-      } catch (e) {
-        setStatus("❌ 同步排假失敗：" + (e?.message || e));
-      }
-    };
-
-    $("btnSyncOT").onclick = async () => {
-      try {
-        const w = await promptWindow(7);
-        if (!w) return;
-        setStatus("同步加班中…");
-        const res = await fetchJSON(`/api/sync/overtime-events?start=${encodeURIComponent(w.start)}&end=${encodeURIComponent(w.end)}`, { method: "POST" });
-        setStatus("✅ 同步加班完成\n" + JSON.stringify(res, null, 2));
-        calendar?.refetchEvents();
-      } catch (e) {
-        setStatus("❌ 同步加班失敗：" + (e?.message || e));
-      }
-    };
-
-    boot();
+    $btnLoad.addEventListener("click", load);
+    $btnLogout.addEventListener("click", () => { clearToken(); location.href="./login.html"; });
+    $btnPwd.addEventListener("click", () => location.href="./change-password.html");
+    $btnAdmin.addEventListener("click", () => location.href="./admin.html");
+    $btnSyncLeave.addEventListener("click", () => doSync("leave"));
+    $btnSyncOT.addEventListener("click", () => doSync("ot"));
   </script>
 </body>
 </html>
