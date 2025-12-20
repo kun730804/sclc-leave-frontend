@@ -1,45 +1,74 @@
-// api.js - minimal client for SCLC Cloudflare Worker
-export const BASE = "https://misty-king-45d9.kun0224.workers.dev";
+// api.js - minimal client for SCLC Worker
+const BASE = "https://misty-king-45d9.kun0224.workers.dev";
 
 export function getToken() {
   return localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
 }
-
-export function setToken(token) {
-  if (token) {
-    localStorage.setItem("auth_token", token);
-    localStorage.setItem("token", token); // backward compat
-  }
+export function setToken(t) {
+  if (!t) return;
+  localStorage.setItem("auth_token", t);
+  localStorage.setItem("token", t); // backward compatible
 }
-
 export function clearToken() {
   localStorage.removeItem("auth_token");
   localStorage.removeItem("token");
 }
 
-export async function fetchJSON(path, opts={}) {
-  const url = path.startsWith("http") ? path : `${BASE}${path}`;
-  const headers = new Headers(opts.headers || {});
+async function req(path, opts={}) {
   const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (opts.json !== undefined) {
-    headers.set("Content-Type", "application/json");
-    opts.body = JSON.stringify(opts.json);
-  }
-  const res = await fetch(url, {...opts, headers});
-  const ct = res.headers.get("content-type") || "";
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(BASE + path, Object.assign({ headers }, opts));
   let data = null;
-  try {
-    data = ct.includes("application/json") ? await res.json() : await res.text();
-  } catch (e) {
-    data = null;
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    data = await res.json().catch(() => null);
+  } else {
+    data = await res.text().catch(() => null);
   }
   if (!res.ok) {
-    const msg = (data && data.error) ? data.error : (typeof data === "string" ? data : `HTTP ${res.status}`);
+    const msg = (data && (data.error || data.message)) || res.statusText || "Request failed";
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;
     throw err;
   }
   return data;
+}
+
+export async function login(emp_no, password) {
+  const data = await req("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ emp_no, password })
+  });
+  if (data?.token) setToken(data.token);
+  return data;
+}
+
+export async function me() {
+  return await req("/api/me");
+}
+
+export async function changePassword(old_password, new_password) {
+  return await req("/api/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ old_password, new_password })
+  });
+}
+
+export async function fetchEvents(start, end) {
+  const qs = new URLSearchParams({ start, end }).toString();
+  return await req(`/api/events?${qs}`);
+}
+
+export async function syncLeaveEvents(start, end) {
+  const qs = new URLSearchParams({ start, end }).toString();
+  return await req(`/api/sync/leave-events?${qs}`, { method: "POST" });
+}
+
+export async function syncOvertimeEvents(start, end) {
+  const qs = new URLSearchParams({ start, end }).toString();
+  return await req(`/api/sync/overtime-events?${qs}`, { method: "POST" });
 }
