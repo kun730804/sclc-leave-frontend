@@ -1,181 +1,32 @@
-<!doctype html>
-<html lang="zh-Hant">
+
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>SCLC 月曆</title>
-  <style>
-    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;margin:0}
-    header{padding:14px 18px;border-bottom:1px solid #eee;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    header h1{font-size:18px;margin:0;margin-right:10px}
-    .muted{color:#666}
-    button{cursor:pointer}
-    .btn{padding:8px 10px;border:1px solid #ccc;border-radius:8px;background:#fff}
-    .btn.primary{background:#111;color:#fff;border-color:#111}
-    main{padding:18px}
-    .card{border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    input{padding:8px 10px;border:1px solid #ccc;border-radius:8px}
-    table{border-collapse:collapse;width:100%}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:14px}
-    th{font-weight:600;background:#fafafa}
-    .tag{display:inline-block;padding:2px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px}
-    .err{color:#c00;min-height:18px}
-    .ok{color:#080;min-height:18px}
-    .right{margin-left:auto}
-  </style>
+<meta charset="UTF-8" />
+<title>月曆</title>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>月曆</h1>
-    <span class="muted" id="who">未登入</span>
-    <span class="right"></span>
-    <button class="btn" id="btnAdmin" style="display:none">Admin</button>
-    <button class="btn" id="btnPwd">改密碼</button>
-    <button class="btn" id="btnLogout">登出</button>
-  </header>
-
-  <main>
-    <div class="card">
-      <div class="row">
-        <div>
-          <div class="muted">查詢區間</div>
-          <div class="row" style="margin-top:6px">
-            <input id="start" type="date"/>
-            <input id="end" type="date"/>
-            <button class="btn primary" id="btnLoad">載入</button>
-          </div>
-        </div>
-        <div style="flex:1"></div>
-        <div>
-          <div class="muted">快速同步（admin）</div>
-          <div class="row" style="margin-top:6px">
-            <button class="btn" id="btnSyncLeave">同步排假</button>
-            <button class="btn" id="btnSyncOT">同步加班</button>
-          </div>
-        </div>
-      </div>
-      <div class="err" id="err"></div>
-      <div class="ok" id="ok"></div>
-    </div>
-
-    <div class="card">
-      <div class="muted">事件列表</div>
-      <div style="margin-top:10px;overflow:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>標題</th>
-              <th>類型</th>
-              <th>人員</th>
-              <th>狀態</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <script type="module">
-    import { me, clearToken, fetchEvents, syncLeaveEvents, syncOvertimeEvents } from "./api.js";
-
-    const $who = document.querySelector("#who");
-    const $btnLogout = document.querySelector("#btnLogout");
-    const $btnPwd = document.querySelector("#btnPwd");
-    const $btnAdmin = document.querySelector("#btnAdmin");
-    const $start = document.querySelector("#start");
-    const $end = document.querySelector("#end");
-    const $btnLoad = document.querySelector("#btnLoad");
-    const $btnSyncLeave = document.querySelector("#btnSyncLeave");
-    const $btnSyncOT = document.querySelector("#btnSyncOT");
-    const $tbody = document.querySelector("#tbody");
-    const $err = document.querySelector("#err");
-    const $ok = document.querySelector("#ok");
-
-    let meData = null;
-
-    function isoDate(d){ return d.toISOString().slice(0,10); }
-    function setMsg(ok, err){ $ok.textContent = ok||""; $err.textContent = err||""; }
-
-    function render(items){
-      $tbody.innerHTML = "";
-      for (const ev of items) {
-        const tr = document.createElement("tr");
-        const d = (ev.start || ev.start_at || "").slice(0,10);
-        const title = ev.title || "";
-        const type = ev.event_type || ev.type || "";
-        const owner = ev.owner_emp_no || ev.emp_no || "";
-        const status = ev.status || "";
-        tr.innerHTML = `
-          <td>${d}</td>
-          <td>${title}</td>
-          <td><span class="tag">${type}</span></td>
-          <td>${owner}</td>
-          <td>${status}</td>
-        `;
-        $tbody.appendChild(tr);
-      }
-    }
-
-    async function load(){
-      setMsg("", "");
-      $btnLoad.disabled = true;
+<h2>公司月曆</h2>
+<div id="calendar"></div>
+<script src="./api.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+    initialView: 'dayGridMonth',
+    events: async (info, success, fail) => {
       try{
-        const data = await fetchEvents($start.value, $end.value);
-        const items = (data.items || []).filter(x => x.status !== "deleted");
-        render(items);
-        setMsg(`已載入 ${items.length} 筆`, "");
-      }catch(e){
-        setMsg("", e?.data?.error || e.message || "載入失敗");
-      }finally{
-        $btnLoad.disabled = false;
-      }
+        const data = await apiGetEvents(info.startStr, info.endStr);
+        success(data.items || []);
+      }catch(e){ fail(e); }
+    },
+    eventClick: (info)=>{
+      alert(info.event.title + "\n" + info.event.start);
     }
-
-    async function doSync(kind){
-      setMsg("", "");
-      const start = $start.value, end = $end.value;
-      if (!start || !end){ setMsg("", "請先選日期"); return; }
-      try{
-        const r = kind === "leave" ? await syncLeaveEvents(start, end) : await syncOvertimeEvents(start, end);
-        setMsg(`同步完成：created ${r.created}, updated ${r.updated}, deleted ${r.deleted}, skipped ${r.skipped}`, "");
-        await load();
-      }catch(e){
-        setMsg("", e?.data?.error || e.message || "同步失敗");
-      }
-    }
-
-    (async () => {
-      try{
-        meData = await me();
-        const u = meData.user || {};
-        $who.textContent = `你好：${u.name_zh || u.login_name || "user"} (${u.emp_no}) role=${u.role}`;
-        if (String(u.role).toLowerCase() === "admin") {
-          $btnAdmin.style.display = "";
-        }
-      }catch(e){
-        clearToken();
-        location.href = "./login.html";
-        return;
-      }
-
-      // default range: this month
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth()+1, 1);
-      $start.value = isoDate(start);
-      $end.value = isoDate(end);
-      await load();
-    })();
-
-    $btnLoad.addEventListener("click", load);
-    $btnLogout.addEventListener("click", () => { clearToken(); location.href="./login.html"; });
-    $btnPwd.addEventListener("click", () => location.href="./change-password.html");
-    $btnAdmin.addEventListener("click", () => location.href="./admin.html");
-    $btnSyncLeave.addEventListener("click", () => doSync("leave"));
-    $btnSyncOT.addEventListener("click", () => doSync("ot"));
-  </script>
+  });
+  cal.render();
+});
+</script>
 </body>
 </html>

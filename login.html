@@ -1,73 +1,27 @@
-<!doctype html>
-<html lang="zh-Hant">
+
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>登入</title>
-  <style>
-    body{font-family:system-ui,Segoe UI,Microsoft JhengHei,Arial;max-width:420px;margin:48px auto;padding:0 16px}
-    h1{margin:0 0 14px}
-    .hint{color:#666;font-size:13px;margin:6px 0 14px}
-    .card{border:1px solid #ddd;border-radius:12px;padding:18px}
-    input,button{width:100%;padding:10px 12px;margin:8px 0;font-size:16px;box-sizing:border-box}
-    button{cursor:pointer}
-    .err{color:#c00;min-height:20px}
-    .row{display:flex;gap:10px}
-    .row button{flex:1}
-  </style>
+<meta charset="UTF-8" />
+<title>登入</title>
 </head>
 <body>
-  <h1>登入</h1>
-  <div class="hint">使用 Cloudflare Worker JWT 登入</div>
-
-  <div class="card">
-    <div class="err" id="msg"></div>
-    <input id="emp" placeholder="員工代碼 / emp_no" autocomplete="username"/>
-    <input id="pwd" placeholder="密碼" type="password" autocomplete="current-password"/>
-    <button id="btn">登入</button>
-  </div>
-
-  <script type="module">
-    import { login, me, clearToken } from "./api.js";
-
-    const $emp = document.querySelector("#emp");
-    const $pwd = document.querySelector("#pwd");
-    const $msg = document.querySelector("#msg");
-    const $btn = document.querySelector("#btn");
-
-    async function doLogin() {
-      $msg.textContent = "";
-      $btn.disabled = true;
-      try {
-        const r = await login($emp.value.trim(), $pwd.value);
-        // 立即驗證 token / 取回 user
-        const m = await me();
-        // 需要改密碼就導到改密碼頁
-        if (String(m?.user?.must_change_password || "N").toUpperCase() === "Y") {
-          location.href = "./change-password.html";
-          return;
-        }
-        // 直接進月曆（app.html 內就是月曆）
-        location.href = "./app.html";
-      } catch (e) {
-        clearToken();
-        $msg.textContent = e?.data?.error || e.message || "登入失敗";
-      } finally {
-        $btn.disabled = false;
-      }
-    }
-
-    $btn.addEventListener("click", doLogin);
-    $pwd.addEventListener("keydown", (ev) => { if (ev.key === "Enter") doLogin(); });
-    $emp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") doLogin(); });
-
-    // 若已有 token，直接試著進入 app
-    (async () => {
-      try {
-        await me();
-        location.href = "./app.html";
-      } catch (_) {}
-    })();
-  </script>
+<h2>登入</h2>
+<input id="emp" placeholder="工號" />
+<input id="pwd" type="password" placeholder="密碼" />
+<button onclick="login()">登入</button>
+<script src="./api.js"></script>
+<script>
+async function login(){
+  const emp_no = document.getElementById('emp').value;
+  const password = document.getElementById('pwd').value;
+  const r = await apiLogin(emp_no, password);
+  if(r.ok){
+    location.href = 'app.html';
+  }else{
+    alert('登入失敗');
+  }
+}
+</script>
 </body>
 </html>
